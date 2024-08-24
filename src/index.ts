@@ -1,5 +1,5 @@
-import * as t from "@babel/types";
-interface HookParams {
+import * as ast from "@babel/types";
+export interface CustomHookParams {
   interfaceName: string;
   hookName: string;
   requestType: string;
@@ -8,123 +8,188 @@ interface HookParams {
   queryKey: string;
 }
 
-function createReturnType(interfaceName: string) {
-  return t.tsTypeReference(
-    t.identifier(interfaceName),
-    t.tsTypeParameterInstantiation([t.tsTypeReference(t.identifier("TData"))])
+function createCustomHookInterface(
+  params: Pick<
+    CustomHookParams,
+    "interfaceName" | "requestType" | "responseType"
+  >
+) {
+  const { interfaceName, requestType, responseType } = params;
+  const propertySignature = ast.tsPropertySignature(
+    ast.identifier("request"),
+    ast.tsTypeAnnotation(ast.tsTypeReference(ast.identifier(requestType)))
+  );
+  propertySignature.optional = true;
+
+  return ast.tsInterfaceDeclaration(
+    ast.identifier(interfaceName),
+
+    ast.tsTypeParameterDeclaration([ast.tsTypeParameter(null, null, "TData")]),
+
+    [
+      ast.tsExpressionWithTypeArguments(
+        ast.identifier("ReactQueryParams"),
+        ast.tsTypeParameterInstantiation([
+          ast.tsTypeReference(ast.identifier(responseType)),
+          ast.tsTypeReference(ast.identifier("TData")),
+        ])
+      ),
+    ],
+
+    ast.tsInterfaceBody([propertySignature])
   );
 }
 
-export function generateHookAST({
+function createQueryFn(queryServiceMethod: string) {
+  const queryFn = ast.arrowFunctionExpression(
+    [],
+    ast.blockStatement([
+      createQueryServiceCheck(),
+      ast.returnStatement(
+        ast.callExpression(
+          ast.memberExpression(
+            ast.identifier("queryService"),
+            ast.identifier(queryServiceMethod)
+          ),
+          [ast.identifier("request")]
+        )
+      ),
+    ]),
+    false
+  );
+
+  return queryFn;
+}
+
+function createQueryServiceCheck() {
+  return ast.ifStatement(
+    ast.unaryExpression("!", ast.identifier("queryService")),
+    ast.throwStatement(
+      ast.newExpression(ast.identifier("Error"), [
+        ast.stringLiteral("Query Service not initialized"),
+      ])
+    )
+  );
+}
+
+function createCustomHookBody(
+  params: Pick<
+    CustomHookParams,
+    "queryServiceMethod" | "queryKey" | "responseType" | "interfaceName"
+  >
+) {
+  const { queryServiceMethod, queryKey, responseType, interfaceName } = params;
+
+  const useQueryHook = ast.callExpression(ast.identifier("useQuery"), [
+    ast.arrayExpression([
+      ast.stringLiteral(queryKey),
+      ast.identifier("request"),
+    ]),
+    createQueryFn(queryServiceMethod),
+    ast.identifier("options"),
+  ]);
+
+  useQueryHook.typeParameters = ast.tsTypeParameterInstantiation([
+    ast.tsTypeReference(ast.identifier(responseType)),
+    ast.tsTypeReference(ast.identifier("Error")),
+    ast.tsTypeReference(ast.identifier("TData")),
+  ]);
+
+  const customHookBody = ast.arrowFunctionExpression(
+    [
+      ast.objectPattern([
+        ast.objectProperty(
+          ast.identifier("request"),
+          ast.identifier("request"),
+          false,
+          true
+        ),
+        ast.objectProperty(
+          ast.identifier("options"),
+          ast.identifier("options"),
+          false,
+          true
+        ),
+      ]),
+    ],
+
+    ast.blockStatement([ast.returnStatement(useQueryHook)]),
+
+    false
+  );
+
+  customHookBody.returnType = ast.tsTypeAnnotation(
+    ast.tsTypeReference(
+      ast.identifier(interfaceName),
+      ast.tsTypeParameterInstantiation([
+        ast.tsTypeReference(ast.identifier("TData")),
+      ])
+    )
+  );
+
+  return customHookBody;
+}
+
+function addTypeParametersToCustomHook(
+  responseType,
+  customHook: ast.ArrowFunctionExpression
+) {
+  const typeParamDeclaration = ast.tsTypeParameterDeclaration([
+    ast.tsTypeParameter(
+      null,
+      ast.tsTypeReference(ast.identifier(responseType)),
+      "TData"
+    ),
+  ]);
+
+  const customHookWithTypeParams = ast.arrowFunctionExpression(
+    customHook.params,
+    customHook.body,
+    customHook.async
+  );
+  customHookWithTypeParams.typeParameters = typeParamDeclaration;
+  customHookWithTypeParams.returnType = customHook.returnType;
+
+  return customHookWithTypeParams;
+}
+
+function createCustomHook(
+  customHookName: string,
+  customHookBody: ast.ArrowFunctionExpression,
+  responseType: string
+) {
+  const typedCustomHook = addTypeParametersToCustomHook(
+    responseType,
+    customHookBody
+  );
+
+  return ast.variableDeclaration("const", [
+    ast.variableDeclarator(ast.identifier(customHookName), typedCustomHook),
+  ]);
+}
+
+export function generateCustomHook({
   interfaceName,
   hookName,
   requestType,
   responseType,
   queryServiceMethod,
   queryKey,
-}: HookParams) {
-  const useHookFunction = t.arrowFunctionExpression(
-    // params
-    [
-      t.objectPattern([
-        t.objectProperty(t.identifier("request"), t.identifier("request")),
-        t.objectProperty(t.identifier("options"), t.identifier("options")),
-      ]),
-    ],
+}: CustomHookParams) {
+  const interfaceAST = createCustomHookInterface({
+    interfaceName,
+    requestType,
+    responseType,
+  });
 
-    // body
-    t.blockStatement([
-      t.returnStatement(
-        t.callExpression(t.identifier("useQuery"), [
-          t.arrayExpression([
-            t.stringLiteral(queryKey),
-            t.identifier("request"),
-          ]),
-          t.arrowFunctionExpression(
-            // params
-            [],
-            // tsInterfaceBody
-            t.blockStatement([
-              t.ifStatement(
-                t.unaryExpression("!", t.identifier("queryService")),
-                t.throwStatement(
-                  t.newExpression(t.identifier("Error"), [
-                    t.stringLiteral("queryService is not defined"),
-                  ])
-                )
-              ),
-              t.returnStatement(
-                t.callExpression(
-                  t.memberExpression(
-                    t.identifier("queryService"),
-                    t.identifier(queryServiceMethod)
-                  ),
-                  [t.identifier("request")]
-                )
-              ),
-            ]),
-            // async?
-            false
-          ),
-          t.identifier("options"),
-        ])
-      ),
-    ]),
-    //Async?
-    false
-  );
+  const useCustomHook = createCustomHookBody({
+    queryServiceMethod,
+    queryKey,
+    responseType,
+    interfaceName,
+  });
 
-  useHookFunction.returnType = t.tsTypeAnnotation(
-    createReturnType(interfaceName)
-  );
+  const customHook = createCustomHook(hookName, useCustomHook, responseType);
 
-  const interfaceAST = t.tsInterfaceDeclaration(
-    t.identifier(interfaceName),
-
-    t.tsTypeParameterDeclaration([t.tsTypeParameter(null, null, "TData")]),
-
-    [
-      t.tsExpressionWithTypeArguments(
-        t.identifier("ReactQueryParams"),
-        t.tsTypeParameterInstantiation([
-          t.tsTypeReference(t.identifier(responseType)),
-          t.tsTypeReference(t.identifier("TData")),
-        ])
-      ),
-    ],
-
-    t.tsInterfaceBody([
-      t.tsPropertySignature(
-        t.identifier("request"),
-        t.tsTypeAnnotation(
-          t.tsUnionType([
-            t.tsTypeReference(t.identifier(requestType)),
-            // t.tsUndefinedKeyword(),
-          ])
-        )
-      ),
-    ])
-  );
-
-  const hookFunctionX = t.variableDeclaration("const", [
-    t.variableDeclarator(t.identifier(hookName), useHookFunction),
-  ]);
-
-  const arrowFunction = hookFunctionX.declarations[0]
-    .init as t.ArrowFunctionExpression;
-  const blockStatement = arrowFunction.body as t.BlockStatement;
-  const returnStatement = blockStatement.body[0] as t.ReturnStatement;
-  const useQueryCall = returnStatement.argument as t.CallExpression;
-
-  if (t.isCallExpression(useQueryCall)) {
-    useQueryCall.typeParameters = t.tsTypeParameterInstantiation([
-      t.tsTypeReference(t.identifier(responseType)),
-      t.tsTypeReference(t.identifier("Error")),
-      t.tsTypeReference(t.identifier("TData")),
-    ]);
-  } else {
-    console.error("Expected useQuery call not found in the generated AST");
-  }
-
-  return t.program([t.exportNamedDeclaration(interfaceAST), hookFunctionX]);
+  return ast.program([ast.exportNamedDeclaration(interfaceAST), customHook]);
 }
