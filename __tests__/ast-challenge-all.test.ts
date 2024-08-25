@@ -14,7 +14,7 @@ interface Methods {
 }
 
 describe("Generate multiple hooks: ", () => {
-  it("should return multiple react query hooks", async () => {
+  it("worked", async () => {
     const methods: Methods = JSON.parse(
       fs.readFileSync(path.join(__dirname, "../example-methods.json"), "utf-8")
     );
@@ -22,11 +22,13 @@ describe("Generate multiple hooks: ", () => {
     for (const [methodName, methodData] of Object.entries(methods)) {
       const ast = generateCustomHook({
         interfaceName: `Use${methodName}Query`,
-        hookName: `use${methodName}`,
+        customHookName: `use${methodName}`,
         requestType: methodData.requestType,
         responseType: methodData.responseType,
         queryServiceMethod: methodName.toLowerCase(),
-        queryKey: `${methodName.toLowerCase()}Query`,
+        queryKey: `${
+          methodName.charAt(0).toLowerCase() + methodName.slice(1)
+        }Query`,
       });
 
       const { code } = generate(ast as any);
