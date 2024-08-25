@@ -155,13 +155,13 @@ function createCustomHook(
   customHookBody: ast.ArrowFunctionExpression,
   responseType: string
 ) {
-  const typedCustomHook = addTypeParametersToCustomHook(
+  const typedCustomHookBody = addTypeParametersToCustomHook(
     responseType,
     customHookBody
   );
 
   return ast.variableDeclaration("const", [
-    ast.variableDeclarator(ast.identifier(customHookName), typedCustomHook),
+    ast.variableDeclarator(ast.identifier(customHookName), typedCustomHookBody),
   ]);
 }
 
