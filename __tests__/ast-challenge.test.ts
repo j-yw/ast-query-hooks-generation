@@ -3,10 +3,10 @@ import generate from "@babel/generator";
 import * as prettier from "prettier";
 
 describe("Generate Hook: ", () => {
-  it("should return one hook", async () => {
+  it("worked", async () => {
     const ast = generateCustomHook({
       interfaceName: "UsePoolsQuery",
-      hookName: "usePools",
+      customHookName: "usePools",
       requestType: "QueryPoolsRequest",
       responseType: "QueryPoolsResponse",
       queryServiceMethod: "pools",
