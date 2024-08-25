@@ -128,9 +128,9 @@ function createCustomHookBody(
   return customHookBody;
 }
 
-function addTypeParametersToCustomHook(
+function addTypeParametersToCustomHookBody(
   responseType,
-  customHook: ast.ArrowFunctionExpression
+  customHookBody: ast.ArrowFunctionExpression
 ) {
   const typeParamDeclaration = ast.tsTypeParameterDeclaration([
     ast.tsTypeParameter(
@@ -141,9 +141,9 @@ function addTypeParametersToCustomHook(
   ]);
 
   const customHookWithTypeParams = ast.arrowFunctionExpression(
-    customHook.params,
-    customHook.body,
-    customHook.async
+    customHookBody.params,
+    customHookBody.body,
+    customHookBody.async
   );
   customHookWithTypeParams.typeParameters = typeParamDeclaration;
 
@@ -155,7 +155,7 @@ function createCustomHook(
   customHookBody: ast.ArrowFunctionExpression,
   responseType: string
 ) {
-  const typedCustomHookBody = addTypeParametersToCustomHook(
+  const typedCustomHookBody = addTypeParametersToCustomHookBody(
     responseType,
     customHookBody
   );
